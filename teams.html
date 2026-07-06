@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Friendzone World Cup Bracket</title>
+<link rel="stylesheet" href="style.css">
+<style>
+
+.teams-page {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 4rem;
+}
+
+.teams-page h2 {
+  font-size: 13px;
+  font-weight: 700;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 1.5rem;
+}
+
+.teams-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+@media (max-width: 500px) {
+  .teams-grid { grid-template-columns: 1fr; }
+}
+
+.team-card {
+  background: #fff;
+  border: 1px solid #e5e3de;
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.team-card.tbd {
+  background: #fafaf9;
+  border-color: #ece9e4;
+}
+
+.team-card.eliminated {
+  background: #ececea;
+  border-color: #ddd9d3;
+}
+
+.team-flag {
+  font-size: 28px;
+  line-height: 1;
+  width: 36px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.team-flag img {
+  width: 36px;
+  height: 24px;
+  object-fit: cover;
+  border-radius: 3px;
+  border: 1px solid #e5e3de;
+  display: block;
+}
+
+.team-flag-placeholder {
+  width: 36px;
+  height: 24px;
+  background: #ece9e4;
+  border-radius: 3px;
+  border: 1px solid #e0ddd8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: #bbb;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.team-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.team-name.tbd {
+  color: #bbb;
+  font-style: italic;
+  font-weight: 400;
+}
+
+.team-name.eliminated,
+.team-person.eliminated {
+  color: #808080;
+}
+
+.team-flag img.eliminated {
+  filter: grayscale(100%);
+}
+
+.team-person {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.team-person.unassigned {
+  font-size: 12px;
+  font-weight: 400;
+  font-style: italic;
+  color: #aaa;
+}
+
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <h1>Friendzone World Cup Bracket</h1>
+  </div>
+  <div class="header-right">
+    <a href="teams.html" class="nav-link active">Teams</a>
+    <a href="index.html" class="nav-link">Bracket</a>
+  </div>
+</header>
+
+<div class="teams-page">
+  <h2>Round of 16 — Team Assignments</h2>
+  <div class="teams-grid" id="teamsGrid"></div>
+</div>
+
+<script>
+'use strict';
+
+// =============================================================================
+// TEAM DATA
+// Populate 'name' once confirmed, leave null for TBD.
+// Populate 'person' once the draw has happened.
+// Pairs: slots 0+1 play each other in R16, 2+3, 4+5, etc.
+// =============================================================================
+
+var FLAG_ISO = {
+  'Canada':'ca', 'Morocco':'ma', 'Paraguay':'py', 'Brazil':'br',
+  'Argentina':'ar', 'Uruguay':'uy', 'Colombia':'co', 'Ecuador':'ec',
+  'USA':'us', 'United States':'us', 'Mexico':'mx', 'France':'fr',
+  'Spain':'es', 'Portugal':'pt', 'Germany':'de', 'Netherlands':'nl',
+  'England':'gb-eng', 'Belgium':'be', 'Austria':'at', 'Croatia':'hr',
+  'Switzerland':'ch', 'Sweden':'se', 'Norway':'no', 'Senegal':'sn',
+  'Ivory Coast':'ci', 'Egypt':'eg', 'Algeria':'dz', 'Ghana':'gh',
+  'Japan':'jp', 'South Korea':'kr', 'Australia':'au', 'Iran':'ir',
+  'Iraq':'iq', 'Uzbekistan':'uz', 'New Zealand':'nz', 'South Africa':'za',
+  'Congo DR':'cd', 'DR Congo':'cd', 'Cape Verde':'cv', 'Cabo Verde':'cv',
+  'Bosnia-Herzegovina':'ba',
+};
+
+// Every match ID in the bracket, from Round of 16 through the Final — used only
+// to check whether a team has been eliminated at any stage, not to place teams.
+var R16_IDS   = ['760502','760503','760504','760505','760506','760507','760508','760509'];
+var QF_IDS    = ['760510','760511','760512','760513'];
+var SF_IDS    = ['760514','760515'];
+var FINAL_ID  = '760517';
+var ALL_IDS   = R16_IDS.concat(QF_IDS, SF_IDS, [FINAL_ID]);
+
+var SCORES = {};
+
+function isPlaceholder(n) {
+  return !n || n === 'TBD' || /^(Group|Round of|Quarter|Semi|Third|Winner|Loser)/i.test(n);
+}
+
+function getScore(id) { return SCORES[id] || null; }
+
+function getWinner(id) {
+  var s = SCORES[id];
+  if (!s || s.status !== 'ft') return null;
+  if (s.winner === 1) return s.t1;
+  if (s.winner === 2) return s.t2;
+  return null;
+}
+
+// Scans every match a team could have played. If any decided match shows
+// someone else winning against them, they're eliminated — regardless of
+// which round it happened in.
+function isTeamEliminated(name) {
+  if (!name) return false;
+  for (var i = 0; i < ALL_IDS.length; i++) {
+    var sc = getScore(ALL_IDS[i]);
+    if (!sc || sc.status !== 'ft') continue;
+    if (sc.t1 !== name && sc.t2 !== name) continue;
+    var w = getWinner(ALL_IDS[i]);
+    if (w && w !== name) return true;
+  }
+  return false;
+}
+
+// Named teams sorted alphabetically, then 12 TBD placeholders.
+// Update name/person here as teams qualify and people are assigned.
+// Add photo: 'filename.jpg' (relative path) once a person is assigned.
+var TEAMS = [
+  { name: 'Paraguay',    person: 'Stef',   photo: null },
+  { name: 'France',      person: 'Joe',     photo: null },
+  { name: 'Canada',      person: 'Ned',     photo: 'images/ned.jpg' },
+  { name: 'Morocco',     person: 'Mick',    photo: null },
+  { name: 'Portugal',    person: 'Frank',   photo: null },
+  { name: 'Spain',       person: 'Kim',     photo: 'images/kim.jpg' },
+  { name: 'USA',         person: 'Chris',   photo: null },
+  { name: 'Belgium',     person: 'Max',     photo: null },
+  { name: 'Brazil',      person: 'Ben',     photo: null },
+  { name: 'Norway',      person: 'Mark',    photo: null },
+  { name: 'Mexico',      person: 'Ahmed',   photo: null },
+  { name: 'England',     person: 'Ren',     photo: null },
+  { name: 'Argentina',   person: 'Harley',  photo: null },
+  { name: 'Egypt',       person: 'Tim',     photo: 'images/tim.jpg' },
+  { name: 'Switzerland', person: 'Jez',    photo: null },
+  { name: 'Colombia',    person: 'Richie', photo: null },
+];
+
+function flagUrl(name) {
+  var iso = FLAG_ISO[name];
+  return iso ? 'https://flagcdn.com/w80/' + iso + '.png' : null;
+}
+
+function render() {
+  var grid = document.getElementById('teamsGrid');
+  while (grid.firstChild) grid.removeChild(grid.lastChild);
+
+  // Sort: named teams alphabetically first, TBD at the end
+  var sorted = TEAMS.slice().sort(function(a, b) {
+    if (a.name && b.name) return a.name.localeCompare(b.name);
+    if (a.name) return -1;
+    if (b.name) return 1;
+    return 0;
+  });
+
+  for (var i = 0; i < sorted.length; i++) {
+    var team = sorted[i];
+    var eliminated = team.name ? isTeamEliminated(team.name) : false;
+    var card = document.createElement('div');
+    card.className = 'team-card' + (team.name ? '' : ' tbd') + (eliminated ? ' eliminated' : '');
+
+    // Flag
+    var flagWrap = document.createElement('div');
+    flagWrap.className = 'team-flag';
+    if (team.name && flagUrl(team.name)) {
+      var img = document.createElement('img');
+      img.src = flagUrl(team.name);
+      img.alt = team.name;
+      if (eliminated) img.className = 'eliminated';
+      flagWrap.appendChild(img);
+    } else {
+      var ph = document.createElement('div');
+      ph.className = 'team-flag-placeholder';
+      ph.textContent = '?';
+      flagWrap.appendChild(ph);
+    }
+    card.appendChild(flagWrap);
+
+    // Country name
+    var nameEl = document.createElement('div');
+    nameEl.className = 'team-name' + (team.name ? '' : ' tbd') + (eliminated ? ' eliminated' : '');
+    nameEl.textContent = team.name || 'TBD';
+    card.appendChild(nameEl);
+
+    // Person name
+    var personEl = document.createElement('div');
+    personEl.className = 'team-person' + (team.person ? '' : ' unassigned') + (eliminated ? ' eliminated' : '');
+    personEl.textContent = team.person || 'Unassigned';
+    card.appendChild(personEl);
+
+    grid.appendChild(card);
+  }
+}
+
+render();
+
+var liveTimer = null;
+
+function fetchScores() {
+  var url = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=20260628-20260719&limit=100';
+  fetch(url).then(function(res) {
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return res.json();
+  }).then(function(data) {
+    var hasLive = false;
+    var events  = data.events || [];
+
+    for (var ei = 0; ei < events.length; ei++) {
+      var ev   = events[ei];
+      var comp = ev.competitions && ev.competitions[0];
+      if (!comp) continue;
+      var teams = comp.competitors || [];
+      if (teams.length < 2) continue;
+
+      var home = null, away = null;
+      for (var ti = 0; ti < teams.length; ti++) {
+        if (teams[ti].homeAway === 'home') home = teams[ti];
+        else away = teams[ti];
+      }
+      if (!home) home = teams[0];
+      if (!away) away = teams[1];
+
+      var t1raw = (home.team && home.team.displayName) || '';
+      var t2raw = (away.team && away.team.displayName) || '';
+      var t1 = isPlaceholder(t1raw) ? null : t1raw;
+      var t2 = isPlaceholder(t2raw) ? null : t2raw;
+
+      var sType = (ev.status && ev.status.type && ev.status.type.name) || '';
+
+      var status = 'pre';
+      if (sType === 'STATUS_FINAL' || sType === 'STATUS_FULL_TIME' || sType === 'STATUS_FINAL_PEN' || sType === 'STATUS_FINAL_AET') status = 'ft';
+      else if (sType === 'STATUS_IN_PROGRESS' || sType === 'STATUS_HALFTIME') status = 'live';
+      if (status === 'live') hasLive = true;
+
+      var s1 = parseInt(home.score != null ? home.score : '0', 10);
+      var s2 = parseInt(away.score != null ? away.score : '0', 10);
+
+      var w = null;
+      if (status === 'ft') {
+        if (home.winner === true) w = 1;
+        else if (away.winner === true) w = 2;
+        else if (s1 > s2) w = 1;
+        else if (s2 > s1) w = 2;
+      }
+
+      SCORES[ev.id] = { t1:t1, t2:t2, s1:s1, s2:s2, status:status, winner:w };
+    }
+
+    render();
+    clearTimeout(liveTimer);
+    if (hasLive) liveTimer = setTimeout(fetchScores, 60000);
+
+  }).catch(function() {
+    // silently fail — page still renders from TEAMS data, just without live elimination status
+  });
+}
+
+fetchScores();
+</script>
+</body>
+</html>

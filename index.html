@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Friendzone World Cup Bracket</title>
+<link rel="stylesheet" href="style.css">
+<style>
+.bracket-page {
+  padding: 1.25rem 1rem 3rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+#bracket-svg-wrap {
+  width: 100%;
+  max-width: 560px;
+  aspect-ratio: 1;
+}
+#bracket-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+}
+.b-line      { fill: none; stroke: #999; stroke-width: 1.5; }
+.b-line.won  { stroke: #999; stroke-width: 1.5; }
+.b-line.live { stroke: #22c55e; stroke-width: 1.5; }
+.b-label {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+  fill: #bbb;
+}
+.b-label.won     { fill: #333; }
+.b-label.active  { fill: #333; }
+.b-label.elim    { fill: #999; }
+.b-label-person  { fill: #666; font-weight: 700; font-size: 9.5px; }
+#b-tip {
+  position: fixed;
+  background: #111;
+  color: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 12px;
+  border-radius: 5px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s;
+  z-index: 300;
+  white-space: nowrap;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <h1>Friendzone World Cup Bracket</h1>
+  </div>
+  <div class="header-right">
+    <a href="teams.html" class="nav-link">Teams</a>
+    <a href="index.html" class="nav-link active">Bracket</a>
+  </div>
+</header>
+
+<div class="bracket-page">
+  <div id="bracket-svg-wrap">
+    <svg id="bracket-svg" viewBox="-280 -280 560 560"></svg>
+  </div>
+</div>
+
+<div id="b-tip"></div>
+
+<script>
+'use strict';
+
+// =============================================================================
+// TEAMS — Round of 16 participants
+// Set 'name' to the team name once known, leave as null if TBD.
+// Set 'person' to the assigned person once the draw has happened.
+// Slots 0–15 clockwise from top; adjacent pairs play each other in R16.
+// =============================================================================
+
+var TEAMS = [
+  // slot 0 & 1 — R16 match 0 (Brazil vs Norway)
+  { name: 'Brazil', person: 'Ben' },
+  { name: 'Norway', person: 'Mark' },
+  // slot 2 & 3 — R16 match 1 (Mexico vs England)
+  { name: 'Mexico', person: 'Ahmed' },
+  { name: 'England', person: 'Ren' },
+  // slot 4 & 5 — R16 match 2 (Argentina vs Egypt)
+  { name: 'Argentina', person: 'Harley' },
+  { name: 'Egypt', person: 'Tim' },
+  // slot 6 & 7 — R16 match 3 (Switzerland vs Colombia)
+  { name: 'Switzerland', person: 'Jez' },
+  { name: 'Colombia', person: 'Richie' },
+  // slot 8 & 9 — R16 match 4 (Belgium vs USA)
+  { name: 'Belgium', person: 'Max' },
+  { name: 'USA', person: 'Chris' },
+  // slot 10 & 11 — R16 match 5 (Spain vs Portugal)
+  { name: 'Spain', person: 'Kim' },
+  { name: 'Portugal', person: 'Frank' },
+  // slot 12 & 13 — R16 match 6 (Morocco vs Canada)
+  { name: 'Morocco', person: 'Mick' },
+  { name: 'Canada', person: 'Ned' },
+  // slot 14 & 15 — R16 match 7 (Paraguay vs France)
+  { name: 'Paraguay', person: 'Stef' },
+  { name: 'France', person: 'Joe' },
+];
+
+// Person lookup by country name — used instead of a fixed slot's person field so
+// that if ESPN reports a team on the opposite side of the card to what we assumed,
+// the correct person still follows their actual country rather than sticking to a slot.
+var PEOPLE = {
+  'Paraguay': 'Stef', 'France': 'Joe', 'Canada': 'Ned', 'Morocco': 'Mick',
+  'Portugal': 'Frank', 'Spain': 'Kim', 'USA': 'Chris', 'United States': 'Chris', 'Belgium': 'Max',
+  'Brazil': 'Ben', 'Norway': 'Mark', 'Mexico': 'Ahmed', 'England': 'Ren',
+  'Argentina': 'Harley', 'Egypt': 'Tim', 'Switzerland': 'Jez', 'Colombia': 'Richie',
+};
+
+function personFor(name) {
+  return name ? (PEOPLE[name] || null) : null;
+}
+
+// =============================================================================
+// ESPN MATCH IDs
+// =============================================================================
+
+// R16 match IDs in clockwise slot order, matching the standalone bracket:
+// match 0 slots  0, 1  Brazil/Japan side    vs CIV/Norway side     (right, ~12 o'clock)
+// match 1 slots  2, 3  Mexico/Ecuador side  vs England/Congo side  (right)
+// match 2 slots  4, 5  Argentina/CV side    vs Australia/Egypt side(bottom right)
+// match 3 slots  6, 7  Switzerland/Alg side vs Colombia/Ghana side (bottom)
+// match 4 slots  8, 9  Belgium/Sen side     vs USA/Bosnia side     (bottom left)
+// match 5 slots 10,11  Spain/Aut side       vs Portugal/Cro side   (left)
+// match 6 slots 12,13  Netherlands/Mor side vs South Africa/Can side (left)
+var R16_IDS = [
+  '760504', // 0  slots  0, 1  Brazil vs Norway
+  '760505', // 1  slots  2, 3  Mexico vs England
+  '760509', // 2  slots  4, 5  Argentina vs Egypt
+  '760508', // 3  slots  6, 7  Switzerland vs Colombia
+  '760507', // 4  slots  8, 9  Belgium vs USA
+  '760506', // 5  slots 10,11  Spain vs Portugal
+  '760502', // 6  slots 12,13  Canada vs Morocco
+  '760503', // 7  slots 14,15  Paraguay vs France
+];
+
+// Potential team labels for slots where the team is not yet known (t1/t2 per match)
+var POTENTIALS = {
+  '760505': { t1: 'MEX/ECU', t2: 'ENG/COD' },
+  '760509': { t1: 'SUI/ALG', t2: 'COL/GHA' },
+  '760506': { t1: 'BEL/SEN', t2: 'USA/BIH' },
+  '760507': { t1: 'ESP/AUT', t2: 'POR/CRO' },
+  '760508': { t1: 'NED/MAR', t2: 'RSA/CAN' },
+};
+
+var QF_IDS = [
+  '760510', // 0  winner R16[0] vs winner R16[1]
+  '760511', // 1  winner R16[2] vs winner R16[3]
+  '760512', // 2  winner R16[4] vs winner R16[5]
+  '760513', // 3  winner R16[6] vs winner R16[7]
+];
+
+var SF_IDS = [
+  '760514', // 0  winner QF[0] vs winner QF[1]
+  '760515', // 1  winner QF[2] vs winner QF[3]
+];
+
+var FINAL_ID = '760517';
+
+// =============================================================================
+// ISO FLAG CODES
+// =============================================================================
+
+var FLAG_ISO = {
+  'Argentina':'ar', 'Brazil':'br', 'Uruguay':'uy', 'Colombia':'co',
+  'Ecuador':'ec', 'Paraguay':'py', 'Venezuela':'ve', 'Chile':'cl',
+  'USA':'us', 'United States':'us', 'Mexico':'mx', 'Canada':'ca',
+  'Panama':'pa', 'Costa Rica':'cr', 'Honduras':'hn', 'Jamaica':'jm',
+  'France':'fr', 'Spain':'es', 'Portugal':'pt', 'Germany':'de',
+  'Netherlands':'nl', 'England':'gb-eng', 'Belgium':'be', 'Austria':'at',
+  'Croatia':'hr', 'Switzerland':'ch', 'Italy':'it', 'Sweden':'se',
+  'Denmark':'dk', 'Norway':'no', 'Serbia':'rs', 'Poland':'pl',
+  'Slovakia':'sk', 'Hungary':'hu', 'Czechia':'cz', 'Scotland':'gb-sct',
+  'Morocco':'ma', 'Senegal':'sn', 'Egypt':'eg', 'Algeria':'dz',
+  'Ghana':'gh', 'Nigeria':'ng', 'Cameroon':'cm', 'Tunisia':'tn',
+  'South Africa':'za', 'Ivory Coast':'ci', 'CIV':'ci',
+  'Congo DR':'cd', 'DR Congo':'cd', 'COD':'cd',
+  'Japan':'jp', 'South Korea':'kr', 'KOR':'kr', 'Australia':'au',
+  'Iran':'ir', 'Iraq':'iq', 'Uzbekistan':'uz', 'New Zealand':'nz',
+  'Saudi Arabia':'sa', 'Qatar':'qa', 'Jordan':'jo',
+  'Bosnia-Herzegovina':'ba', 'BIH':'ba',
+  'Cape Verde':'cv', 'Cabo Verde':'cv', 'CPV':'cv',
+};
+
+function flagUrl(name) {
+  if (!name) return null;
+  var iso = FLAG_ISO[name];
+  return iso ? 'https://flagcdn.com/w80/' + iso + '.png' : null;
+}
+
+function shortName(name) {
+  if (!name) return '?';
+  var SHORT = {
+    'Argentina':'ARG','Brazil':'BRA','Uruguay':'URU','Colombia':'COL',
+    'Ecuador':'ECU','Paraguay':'PAR','USA':'USA','United States':'USA',
+    'Mexico':'MEX','Canada':'CAN','France':'FRA','Spain':'ESP',
+    'Portugal':'POR','Germany':'GER','Netherlands':'NED','England':'ENG',
+    'Belgium':'BEL','Austria':'AUT','Croatia':'CRO','Switzerland':'SUI',
+    'Sweden':'SWE','Norway':'NOR','Morocco':'MAR','Senegal':'SEN',
+    'Ivory Coast':'CIV','CIV':'CIV','Egypt':'EGY','Algeria':'ALG',
+    'Ghana':'GHA','Japan':'JPN','South Korea':'KOR','KOR':'KOR',
+    'Australia':'AUS','Iran':'IRN','Iraq':'IRQ','Uzbekistan':'UZB',
+    'New Zealand':'NZL','South Africa':'RSA','Congo DR':'COD',
+    'DR Congo':'COD','COD':'COD','Bosnia-Herzegovina':'BIH','BIH':'BIH',
+    'Cape Verde':'CPV','Cabo Verde':'CPV','CPV':'CPV',
+    'Saudi Arabia':'KSA','Venezuela':'VEN','Chile':'CHI',
+    'Panama':'PAN','Costa Rica':'CRC','Nigeria':'NGA','Cameroon':'CMR',
+    'Serbia':'SRB','Italy':'ITA','Denmark':'DEN',
+  };
+  return SHORT[name] || name.slice(0, 3).toUpperCase();
+}
+
+// =============================================================================
+// GEOMETRY
+// 16 team slots evenly around 360°. Each slot = 22.5°.
+// Slot 0 starts at 0° (top), clockwise.
+// =============================================================================
+
+var SLOT_DEG = 360 / 16; // 22.5°
+
+function slotAngle(s) { return s * SLOT_DEG + 11.25; }
+function joinAngle(i) { return (slotAngle(i*2) + slotAngle(i*2+1)) / 2; }
+function qfAngle(i)   { return (joinAngle(i*2) + joinAngle(i*2+1)) / 2; }
+function sfAngle(i)   { return (qfAngle(i*2)   + qfAngle(i*2+1))  / 2; }
+
+function polar(deg, r) {
+  var rad = (deg - 90) * Math.PI / 180;
+  return { x: r * Math.cos(rad), y: r * Math.sin(rad) };
+}
+
+var RADII = { r16: 220, join: 175, qf: 130, sf: 85, centre: 44 };
+var NR    = { r16: 20,  join: 17,  qf: 15,  sf: 14,  centre: 22 };
+
+// =============================================================================
+// SCORE DATA
+// =============================================================================
+
+var SCORES = {};
+
+function isPlaceholder(n) {
+  return !n || n === 'TBD' || /^(Group|Round of|Quarter|Semi|Third|Winner|Loser)/i.test(n);
+}
+
+function getScore(id) { return SCORES[id] || null; }
+
+function getWinner(id) {
+  var s = SCORES[id];
+  if (!s || s.status !== 'ft') return null;
+  if (s.winner === 1) return s.t1;
+  if (s.winner === 2) return s.t2;
+  return null;
+}
+
+// =============================================================================
+// SVG HELPERS
+// =============================================================================
+
+var NS  = 'http://www.w3.org/2000/svg';
+var svg = document.getElementById('bracket-svg');
+var _clipId = 0;
+
+function svgEl(tag, attrs) {
+  var e = document.createElementNS(NS, tag);
+  var keys = Object.keys(attrs || {});
+  for (var k = 0; k < keys.length; k++) e.setAttribute(keys[k], attrs[keys[k]]);
+  return e;
+}
+
+function seg(x1, y1, x2, y2, cls) {
+  var l = svgEl('line', { x1:x1, y1:y1, x2:x2, y2:y2 });
+  l.classList.add('b-line');
+  if (cls) l.classList.add(cls);
+  return l;
+}
+
+function makeNode(x, y, r, teamName, scoreId, eliminated) {
+  var g = svgEl('g');
+  if (!teamName) {
+    var emp = svgEl('circle', { cx:x, cy:y, r:r, fill:'#e8e5e0', stroke:'#bbb', 'stroke-width':1.2 });
+    g.appendChild(emp);
+    var qt = svgEl('text', { x:x, y:y, 'text-anchor':'middle', 'dominant-baseline':'central',
+      'font-size': Math.round(r * 0.65), fill:'#ccc',
+      'font-family':"-apple-system, sans-serif", 'pointer-events':'none' });
+    qt.textContent = '?';
+    g.appendChild(qt);
+    return g;
+  }
+
+  var dim = !!eliminated;
+  var s   = scoreId ? getScore(scoreId) : null;
+  var url = flagUrl(teamName);
+
+  if (url) {
+    var cid = 'cp' + (++_clipId);
+    var defsEl = svg.querySelector('defs');
+    var cp = svgEl('clipPath', { id: cid });
+    cp.appendChild(svgEl('circle', { cx:x, cy:y, r:r }));
+    defsEl.appendChild(cp);
+
+    var imgW = r * 3, imgH = r * 2;
+    var img = svgEl('image', {
+      x: x - imgW/2, y: y - imgH/2,
+      width: imgW, height: imgH,
+      href: url,
+      'clip-path': 'url(#' + cid + ')',
+      preserveAspectRatio: 'xMidYMid slice',
+      'pointer-events': 'all',
+    });
+    if (dim) img.setAttribute('filter', 'url(#greyscale)');
+    if (scoreId) {
+      (function(eid, tn) {
+        img.addEventListener('mouseenter', function(e) { showTip(e, tn, eid); });
+        img.addEventListener('mousemove', moveTip);
+        img.addEventListener('mouseleave', hideTip);
+      }(scoreId, teamName));
+    }
+    g.appendChild(img);
+  } else {
+    var disc = svgEl('circle', { cx:x, cy:y, r:r, fill: dim ? '#e8e5e0' : '#fff' });
+    if (scoreId) {
+      (function(eid, tn) {
+        disc.addEventListener('mouseenter', function(e) { showTip(e, tn, eid); });
+        disc.addEventListener('mousemove', moveTip);
+        disc.addEventListener('mouseleave', hideTip);
+      }(scoreId, teamName));
+    }
+    g.appendChild(disc);
+    var code = svgEl('text', { x:x, y:y, 'text-anchor':'middle', 'dominant-baseline':'central',
+      'font-size': Math.round(r * 0.55), fill: dim ? '#bbb' : '#555',
+      'font-family':"-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+      'font-weight':600, 'pointer-events':'none' });
+    code.textContent = shortName(teamName);
+    g.appendChild(code);
+  }
+
+  return g;
+}
+
+// Label pushed outward from node — person name on top, country code below
+function makeLabel(x, y, angleDeg, text, nodeR, cls, person) {
+  var push = nodeR + 24;
+  var rad  = (angleDeg - 90) * Math.PI / 180;
+  var lx   = x + Math.cos(rad) * push;
+  var ly   = y + Math.sin(rad) * push;
+
+  if (person) {
+    var g = svgEl('g');
+    var t1 = svgEl('text', { x:lx, y:ly - 5 });
+    t1.classList.add('b-label', 'b-label-person');
+    if (cls) t1.classList.add(cls);
+    t1.textContent = person;
+    g.appendChild(t1);
+    var t2 = svgEl('text', { x:lx, y:ly + 5 });
+    t2.classList.add('b-label');
+    if (cls) t2.classList.add(cls);
+    t2.textContent = text;
+    g.appendChild(t2);
+    return g;
+  }
+
+  var t = svgEl('text', { x:lx, y:ly });
+  t.classList.add('b-label');
+  if (cls) t.classList.add(cls);
+  t.textContent = text;
+  return t;
+}
+
+// =============================================================================
+// BUILD
+// =============================================================================
+
+function build() {
+  while (svg.lastChild) svg.removeChild(svg.lastChild);
+
+  // Defs
+  var defs = svgEl('defs');
+  var rg = svgEl('radialGradient', { id:'cg', cx:'50%', cy:'50%', r:'50%' });
+  [['0%','#f7c948','0.14'],['40%','#f7c948','0.04'],['100%','#f2f1ed','0']].forEach(function(s) {
+    rg.appendChild(svgEl('stop', { offset:s[0], 'stop-color':s[1], 'stop-opacity':s[2] }));
+  });
+  defs.appendChild(rg);
+  var flt = svgEl('filter', { id:'greyscale' });
+  flt.appendChild(svgEl('feColorMatrix', { type:'saturate', values:'0' }));
+  defs.appendChild(flt);
+  svg.appendChild(defs);
+
+  // Background
+  svg.appendChild(svgEl('circle', { cx:0, cy:0, r:280, fill:'#f2f1ed' }));
+  svg.appendChild(svgEl('circle', { cx:0, cy:0, r:120, fill:'url(#cg)' }));
+
+  // Partial arcs — one per matchup at each ring
+  function arc(r, startDeg, endDeg) {
+    var s = (startDeg - 90) * Math.PI / 180;
+    var e = (endDeg   - 90) * Math.PI / 180;
+    var x1 = r * Math.cos(s), y1 = r * Math.sin(s);
+    var x2 = r * Math.cos(e), y2 = r * Math.sin(e);
+    var span = ((endDeg - startDeg) + 360) % 360;
+    var large = span > 180 ? 1 : 0;
+    svg.appendChild(svgEl('path', {
+      d: 'M '+x1+' '+y1+' A '+r+' '+r+' 0 '+large+' 1 '+x2+' '+y2,
+      fill:'none', stroke:'#999', 'stroke-width':1.5,
+    }));
+  }
+
+  // R16 ring: arc between each pair of team slots
+  for (var ai = 0; ai < 8; ai++) arc(RADII.r16, slotAngle(ai*2), slotAngle(ai*2+1));
+  // Join ring: arc between each pair of join nodes feeding a QF match
+  for (var ai2 = 0; ai2 < 4; ai2++) arc(RADII.join, joinAngle(ai2*2), joinAngle(ai2*2+1));
+  // QF ring: arc between each pair of QF nodes feeding a SF match
+  for (var ai3 = 0; ai3 < 2; ai3++) arc(RADII.qf, qfAngle(ai3*2), qfAngle(ai3*2+1));
+  // SF ring: arc between the two SF nodes
+  arc(RADII.sf, sfAngle(0), sfAngle(1));
+
+  var linesG = svgEl('g');
+  var nodesG = svgEl('g');
+
+  // ── Positions ──
+
+  var slotPos = [], slotAng = [];
+  for (var si = 0; si < 16; si++) {
+    slotPos.push(polar(slotAngle(si), RADII.r16));
+    slotAng.push(slotAngle(si));
+  }
+
+  var joinP = [], joinA = [];
+  for (var ji = 0; ji < 8; ji++) {
+    joinP.push(polar(joinAngle(ji), RADII.join));
+    joinA.push(joinAngle(ji));
+  }
+
+  var qfP = [], qfA = [];
+  for (var qi = 0; qi < 4; qi++) {
+    qfP.push(polar(qfAngle(qi), RADII.qf));
+    qfA.push(qfAngle(qi));
+  }
+
+  var sfP = [], sfA = [];
+  for (var sfi = 0; sfi < 2; sfi++) {
+    sfP.push(polar(sfAngle(sfi), RADII.sf));
+    sfA.push(sfAngle(sfi));
+  }
+
+  var finWin = getWinner(FINAL_ID);
+  var finSc  = getScore(FINAL_ID);
+
+  // ── Lines: arc midpoint on R16 ring → join nodes ──
+  for (var mi = 0; mi < 8; mi++) {
+    var sc  = getScore(R16_IDS[mi]);
+    var w   = getWinner(R16_IDS[mi]);
+    var liv = sc && sc.status === 'live';
+    var mid = polar(joinAngle(mi), RADII.r16);
+    linesG.appendChild(seg(mid.x, mid.y, joinP[mi].x, joinP[mi].y,
+      liv ? 'live' : (w ? 'won' : '')));
+  }
+
+  // ── Lines: arc midpoint on join ring → QF nodes ──
+  for (var qi2 = 0; qi2 < 4; qi2++) {
+    var qsc  = getScore(QF_IDS[qi2]);
+    var qw   = getWinner(QF_IDS[qi2]);
+    var qliv = qsc && qsc.status === 'live';
+    var mid2 = polar(qfAngle(qi2), RADII.join);
+    linesG.appendChild(seg(mid2.x, mid2.y, qfP[qi2].x, qfP[qi2].y,
+      qliv ? 'live' : (qw ? 'won' : '')));
+  }
+
+  // ── Lines: arc midpoint on QF ring → SF nodes ──
+  for (var si2 = 0; si2 < 2; si2++) {
+    var ssc  = getScore(SF_IDS[si2]);
+    var sw   = getWinner(SF_IDS[si2]);
+    var sliv = ssc && ssc.status === 'live';
+    var mid3 = polar(sfAngle(si2), RADII.qf);
+    linesG.appendChild(seg(mid3.x, mid3.y, sfP[si2].x, sfP[si2].y,
+      sliv ? 'live' : (sw ? 'won' : '')));
+  }
+
+  // ── Line: arc midpoint on SF ring → centre ──
+  var fsc  = getScore(FINAL_ID);
+  var fw   = getWinner(FINAL_ID);
+  var fliv = fsc && fsc.status === 'live';
+  var finMid = polar((sfAngle(0) + sfAngle(1)) / 2, RADII.sf);
+  linesG.appendChild(seg(finMid.x, finMid.y, 0, 0,
+    fliv ? 'live' : (fw ? 'won' : '')));
+
+  // ── R16 team nodes (outer ring) ──
+  for (var mi2 = 0; mi2 < 16; mi2++) {
+    var rid   = R16_IDS[Math.floor(mi2 / 2)];
+    var sc2   = getScore(rid);
+    var w2    = getWinner(rid);
+    var espnT = sc2 ? (mi2 % 2 === 0 ? sc2.t1 : sc2.t2) : null;
+    var tname = (espnT && !isPlaceholder(espnT)) ? espnT : TEAMS[mi2].name;
+    var elim   = w2 && tname && w2 !== tname;
+    var person = personFor(tname);
+    var lblCls = elim ? 'elim' : (w2 === tname ? 'won' : (tname ? 'active' : ''));
+    // Use potential label when team not yet known
+    var pot    = POTENTIALS[rid];
+    var displayLbl = tname ? shortName(tname)
+                           : (pot ? (mi2 % 2 === 0 ? pot.t1 : pot.t2) : '?');
+    nodesG.appendChild(makeNode(slotPos[mi2].x, slotPos[mi2].y, NR.r16, tname, rid, elim));
+    nodesG.appendChild(makeLabel(slotPos[mi2].x, slotPos[mi2].y, slotAng[mi2],
+      displayLbl, NR.r16, lblCls, person));
+  }
+
+  // ── Join nodes (show R16 winner) — no labels ──
+  for (var ji3 = 0; ji3 < 8; ji3++) {
+    var jw = getWinner(R16_IDS[ji3]);
+    nodesG.appendChild(makeNode(joinP[ji3].x, joinP[ji3].y, NR.join, jw, R16_IDS[ji3], false));
+  }
+
+  // ── QF nodes — no labels ──
+  for (var qi3 = 0; qi3 < 4; qi3++) {
+    var qfw = getWinner(QF_IDS[qi3]);
+    nodesG.appendChild(makeNode(qfP[qi3].x, qfP[qi3].y, NR.qf, qfw, QF_IDS[qi3], false));
+  }
+
+  // ── SF nodes — no labels ──
+  for (var si3 = 0; si3 < 2; si3++) {
+    var sfw = getWinner(SF_IDS[si3]);
+    nodesG.appendChild(makeNode(sfP[si3].x, sfP[si3].y, NR.sf, sfw, SF_IDS[si3], false));
+  }
+
+  svg.appendChild(linesG);
+  svg.appendChild(nodesG);
+
+  // ── Centre node ──
+  var cg = svgEl('g');
+  var centreR = NR.centre;
+  if (finWin) {
+    nodesG.appendChild(makeNode(0, 0, centreR, finWin, FINAL_ID, false));
+  } else {
+    cg.appendChild(svgEl('circle', { cx:0, cy:0, r:centreR,
+      fill:'#e8e5e0', stroke:'#bbb', 'stroke-width':1.5 }));
+    var qt2 = svgEl('text', { x:0, y:0, 'text-anchor':'middle', 'dominant-baseline':'central',
+      'font-size': Math.round(centreR * 0.65), fill:'#ccc',
+      'font-family':"-apple-system, sans-serif", 'pointer-events':'none' });
+    qt2.textContent = '?';
+    cg.appendChild(qt2);
+  }
+  svg.appendChild(cg);
+}
+
+// =============================================================================
+// TOOLTIP
+// =============================================================================
+
+var tip = document.getElementById('b-tip');
+
+function showTip(e, teamName, espnId) {
+  var s = SCORES[espnId];
+  var text = teamName;
+  if (s && (s.status === 'live' || s.status === 'ft') && s.t1 && s.t2) {
+    var other  = s.t1 === teamName ? s.t2 : s.t1;
+    var myS    = s.t1 === teamName ? s.s1 : s.s2;
+    var theirS = s.t1 === teamName ? s.s2 : s.s1;
+    var lbl    = s.status === 'live' ? (s.clock || 'Live') : 'FT';
+    text = teamName + '  ' + myS + '–' + theirS + '  ' + other + '  (' + lbl + ')';
+    if (s.pen) text += '  — ' + s.pen;
+  } else if (s && s.t1 && s.t2 && !isPlaceholder(s.t2)) {
+    text = teamName + ' vs ' + (s.t1 === teamName ? s.t2 : s.t1);
+  }
+  tip.textContent = text;
+  tip.style.opacity = '1';
+  moveTip(e);
+}
+function moveTip(e) {
+  tip.style.left = (e.clientX + 14) + 'px';
+  tip.style.top  = (e.clientY - 30) + 'px';
+}
+function hideTip() { tip.style.opacity = '0'; }
+
+// =============================================================================
+// ESPN FETCH
+// =============================================================================
+
+var liveTimer = null;
+
+function fetchScores() {
+  var url = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=20260628-20260719&limit=100';
+  fetch(url).then(function(res) {
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return res.json();
+  }).then(function(data) {
+    var hasLive = false;
+    var events  = data.events || [];
+
+    for (var ei = 0; ei < events.length; ei++) {
+      var ev   = events[ei];
+      var comp = ev.competitions && ev.competitions[0];
+      if (!comp) continue;
+      var teams = comp.competitors || [];
+      if (teams.length < 2) continue;
+
+      var home = null, away = null;
+      for (var ti = 0; ti < teams.length; ti++) {
+        if (teams[ti].homeAway === 'home') home = teams[ti];
+        else away = teams[ti];
+      }
+      if (!home) home = teams[0];
+      if (!away) away = teams[1];
+
+      var t1raw = (home.team && home.team.displayName) || '';
+      var t2raw = (away.team && away.team.displayName) || '';
+      var t1 = isPlaceholder(t1raw) ? null : t1raw;
+      var t2 = isPlaceholder(t2raw) ? null : t2raw;
+
+      var sType  = (ev.status && ev.status.type && ev.status.type.name) || '';
+      var rawClk = (ev.status && ev.status.displayClock) || '';
+      var period = (ev.status && ev.status.period) || 0;
+
+      var status = 'pre';
+      if (sType === 'STATUS_FINAL' || sType === 'STATUS_FULL_TIME' || sType === 'STATUS_FINAL_PEN' || sType === 'STATUS_FINAL_AET') status = 'ft';
+      else if (sType === 'STATUS_IN_PROGRESS' || sType === 'STATUS_HALFTIME') status = 'live';
+      if (status === 'live') hasLive = true;
+
+      var clockDisp = '';
+      if (status === 'live') {
+        if (sType === 'STATUS_HALFTIME') {
+          clockDisp = 'HT';
+        } else {
+          var mins = parseInt(rawClk.split(':')[0], 10) || 0;
+          var cap  = period === 1 ? 45 : 90;
+          clockDisp = mins > cap ? cap + '+' + (mins-cap) + "'" : mins + "'";
+        }
+      }
+      if (sType === 'STATUS_FINAL_PEN') clockDisp = 'Pens';
+
+      var s1 = parseInt(home.score != null ? home.score : '0', 10);
+      var s2 = parseInt(away.score != null ? away.score : '0', 10);
+
+      var w = null;
+      if (status === 'ft') {
+        if (home.winner === true) w = 1;
+        else if (away.winner === true) w = 2;
+        else if (s1 > s2) w = 1;
+        else if (s2 > s1) w = 2;
+      }
+
+      var pen = null;
+      var notes = comp.notes || [];
+      if (notes.length) pen = notes[0].headline || notes[0].text || null;
+
+      SCORES[ev.id] = { t1:t1, t2:t2, s1:s1, s2:s2, status:status, clock:clockDisp, winner:w, pen:pen };
+    }
+
+    build();
+    clearTimeout(liveTimer);
+    if (hasLive) liveTimer = setTimeout(fetchScores, 60000);
+
+  }).catch(function() {
+    // silently fail — bracket still renders from TEAMS data
+  });
+}
+
+// =============================================================================
+// INIT
+// =============================================================================
+build();
+fetchScores();
+</script>
+</body>
+</html>
