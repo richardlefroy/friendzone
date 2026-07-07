@@ -182,13 +182,18 @@ function isPlaceholder(n) {
   return !n || n === 'TBD' || /^(Group|Round of|Quarter|Semi|Third|Winner|Loser)/i.test(n);
 }
 
+// ESPN's displayName doesn't always match the name used in TEAMS (e.g. it
+// reports "United States" while TEAMS uses "USA").
+var NAME_ALIASES = { 'United States': 'USA' };
+function normTeam(n) { return NAME_ALIASES[n] || n; }
+
 function getScore(id) { return SCORES[id] || null; }
 
 function getWinner(id) {
   var s = SCORES[id];
   if (!s || s.status !== 'ft') return null;
-  if (s.winner === 1) return s.t1;
-  if (s.winner === 2) return s.t2;
+  if (s.winner === 1) return normTeam(s.t1);
+  if (s.winner === 2) return normTeam(s.t2);
   return null;
 }
 
@@ -200,7 +205,8 @@ function isTeamEliminated(name) {
   for (var i = 0; i < ALL_IDS.length; i++) {
     var sc = getScore(ALL_IDS[i]);
     if (!sc || sc.status !== 'ft') continue;
-    if (sc.t1 !== name && sc.t2 !== name) continue;
+    var t1 = normTeam(sc.t1), t2 = normTeam(sc.t2);
+    if (t1 !== name && t2 !== name) continue;
     var w = getWinner(ALL_IDS[i]);
     if (w && w !== name) return true;
   }
