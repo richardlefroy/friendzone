@@ -239,37 +239,6 @@ header {
 .match-status.ft   { color: #888; }
 .match-status.pre  { color: #999; }
 
-/* ── Eliminated modal overlay ── */
-.elim-overlay {
-  display: none;
-  position: fixed; inset: 0;
-  background: rgba(0,0,0,0.6);
-  z-index: 998;
-}
-.elim-overlay.show { display: block; }
-
-.elim-toast {
-  display: none;
-  position: fixed;
-  top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  background: #fff; color: #1a1a1a; border-radius: 16px;
-  padding: 32px 28px 28px;
-  max-width: 380px; width: calc(100% - 3rem);
-  text-align: center; font-size: 16px; line-height: 1.6;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.35);
-  z-index: 999;
-}
-.elim-toast.show { display: block; }
-.elim-toast strong { display: block; font-size: 22px; margin-bottom: 12px; }
-.elim-toast span { display: block; }
-.elim-toast-close {
-  position: absolute; top: 12px; right: 14px;
-  background: none; border: none; font-size: 20px; line-height: 1;
-  color: #aaa; cursor: pointer; padding: 4px;
-}
-.elim-toast-close:hover { color: #333; }
-
 /* ── Empty state ── */
 .no-matches {
   font-size: 14px; color: #999; text-align: center; padding: 3rem; display: none;

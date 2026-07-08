@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Friendzone Le copa de la vida</title>
+<link rel="stylesheet" href="style.css">
+<style>
+.team-flag img {
+  width: 20px;
+  height: 14px;
+  object-fit: cover;
+  border-radius: 2px;
+  border: 1px solid #e5e3de;
+  display: block;
+}
+.person-filter-flag {
+  width: 16px;
+  height: 11px;
+  object-fit: cover;
+  border-radius: 2px;
+  border: 1px solid #e5e3de;
+  vertical-align: middle;
+  margin-right: 5px;
+}
+.pill-filter button.eliminated .person-filter-flag {
+  filter: grayscale(100%);
+  opacity: 0.7;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <h1>Friendzone Le copa de la vida</h1>
+  </div>
+  <div class="header-right">
+    <a href="teams.html" class="nav-link">Teams</a>
+    <a href="index.html" class="nav-link">Bracket</a>
+    <a href="matches.html" class="nav-link active">Matches</a>
+  </div>
+</header>
+
+<div class="subheader">
+  <button class="upcoming-btn" onclick="scrollToUpcoming()">Upcoming matches</button>
+  <div class="tz-selector">
+    <label>Timezone:</label>
+    <select id="tzSelect" onchange="localStorage.setItem('fz5tz', this.value); renderSchedule()">
+      <option value="local">Local match time</option>
+      <option value="Australia/Perth" selected>Perth</option>
+      <option value="Australia/Melbourne">Melbourne</option>
+      <option value="Australia/Hobart">Hobart</option>
+      <option value="Europe/Berlin">Germany</option>
+      <option value="Europe/Rome">Italy</option>
+      <option value="Europe/London">United Kingdom</option>
+      <option value="America/Los_Angeles">Los Angeles</option>
+      <option value="Europe/Zurich">Switzerland</option>
+    </select>
+  </div>
+</div>
+
+<div class="content">
+
+  <div class="filter-section">
+    <div class="filter-label">Filter by stage</div>
+    <div class="pill-filter stage-filter" id="stageFilter">
+      <button class="active" data-stage="all" onclick="filterStage(this)">All</button>
+      <button data-stage="R16" onclick="filterStage(this)">Round of 16</button>
+      <button data-stage="QF"  onclick="filterStage(this)">Quarter-finals</button>
+      <button data-stage="SF"  onclick="filterStage(this)">Semi-finals</button>
+      <button data-stage="TP"  onclick="filterStage(this)">Third place</button>
+      <button data-stage="F"   onclick="filterStage(this)">Final</button>
+    </div>
+  </div>
+
+  <div class="filter-section">
+    <div class="filter-toggle-row">
+      <button class="person-filter-toggle" id="personFilterToggle" onclick="togglePersonFilter()">
+        Filter by name <span class="toggle-arrow">▼</span>
+      </button>
+      <div class="person-active-chips" id="personActiveChips"></div>
+    </div>
+    <div class="person-filter-panel" id="personFilterPanel">
+      <div class="pill-filter person-filter" id="personFilter">
+        <button class="active" data-person="all" onclick="filterPerson(this)">Everyone</button>
+        <button data-person="Ahmad" onclick="filterPerson(this)">Ahmad</button>
+        <button data-person="Ben" onclick="filterPerson(this)">Ben</button>
+        <button data-person="Chris" onclick="filterPerson(this)">Chris</button>
+        <button data-person="Frank" onclick="filterPerson(this)">Frank</button>
+        <button data-person="Harley" onclick="filterPerson(this)">Harley</button>
+        <button data-person="Jez" onclick="filterPerson(this)">Jez</button>
+        <button data-person="Joe" onclick="filterPerson(this)">Joe</button>
+        <button data-person="Kim" onclick="filterPerson(this)">Kim</button>
+        <button data-person="Mark" onclick="filterPerson(this)">Mark</button>
+        <button data-person="Max" onclick="filterPerson(this)">Max</button>
+        <button data-person="Mick" onclick="filterPerson(this)">Mick</button>
+        <button data-person="Ned" onclick="filterPerson(this)">Ned</button>
+        <button data-person="Ren" onclick="filterPerson(this)">Ren</button>
+        <button data-person="Richie" onclick="filterPerson(this)">Richie</button>
+        <button data-person="Stef" onclick="filterPerson(this)">Stef</button>
+        <button data-person="Tim" onclick="filterPerson(this)">Tim</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="schedule"></div>
+  <div class="no-matches" id="noMatches">No matches found for the current filters.</div>
+
+</div>
+
+<script>
+'use strict';
+
+// ET = UTC-4 in summer
+function etMs(y, mo, d, h, m) {
+  return Date.UTC(y, mo - 1, d, h + 4, m || 0);
+}
+
+var STAGE_LABELS = {
+  R16: "Round of 16",
+  QF:  "Quarter-final",
+  SF:  "Semi-final",
+  TP:  "Third place",
+  F:   "Final",
+};
+
+// MATCHES is keyed by ESPN event ID so we can match scores and resolved team names.
+// R16 pairings are already known for friendzone5; later rounds start as TBD and
+// get filled in from ESPN as results come in — same espnIds as the tournament bracket.
+var MATCHES = [
+  // ── Round of 16 ──────────────────────────────────────────────
+  { ms: etMs(2026,7, 4,13,0), stage:"R16", espnId:"760502", t1:"Morocco",     t2:"Canada",   venue:"NRG Stadium, Houston" },
+  { ms: etMs(2026,7, 4,17,0), stage:"R16", espnId:"760503", t1:"Paraguay",    t2:"France",   venue:"Lincoln Financial Field, Philadelphia" },
+  { ms: etMs(2026,7, 5,16,0), stage:"R16", espnId:"760504", t1:"Brazil",      t2:"Norway",   venue:"MetLife Stadium, New York/NJ" },
+  { ms: etMs(2026,7, 5,20,0), stage:"R16", espnId:"760505", t1:"Mexico",      t2:"England",  venue:"Estadio Azteca, Mexico City" },
+  { ms: etMs(2026,7, 6,15,0), stage:"R16", espnId:"760506", t1:"Spain",       t2:"Portugal", venue:"AT&T Stadium, Dallas" },
+  { ms: etMs(2026,7, 6,20,0), stage:"R16", espnId:"760507", t1:"Belgium",     t2:"USA",      venue:"Lumen Field, Seattle" },
+  { ms: etMs(2026,7, 7,12,0), stage:"R16", espnId:"760508", t1:"Switzerland", t2:"Colombia", venue:"Mercedes-Benz Stadium, Atlanta" },
+  { ms: etMs(2026,7, 7,16,0), stage:"R16", espnId:"760509", t1:"Argentina",   t2:"Egypt",    venue:"BC Place, Vancouver" },
+  // ── Quarter-finals ───────────────────────────────────────────
+  { ms: etMs(2026,7, 9,16,0), stage:"QF",  espnId:"760510", t1:"TBD", t2:"TBD", venue:"Gillette Stadium, Boston" },
+  { ms: etMs(2026,7,10,15,0), stage:"QF",  espnId:"760511", t1:"TBD", t2:"TBD", venue:"SoFi Stadium, LA" },
+  { ms: etMs(2026,7,11,17,0), stage:"QF",  espnId:"760512", t1:"TBD", t2:"TBD", venue:"Hard Rock Stadium, Miami" },
+  { ms: etMs(2026,7,11,21,0), stage:"QF",  espnId:"760513", t1:"TBD", t2:"TBD", venue:"Arrowhead Stadium, Kansas City" },
+  // ── Semi-finals ──────────────────────────────────────────────
+  { ms: etMs(2026,7,14,15,0), stage:"SF",  espnId:"760514", t1:"TBD", t2:"TBD", venue:"AT&T Stadium, Dallas" },
+  { ms: etMs(2026,7,15,15,0), stage:"SF",  espnId:"760515", t1:"TBD", t2:"TBD", venue:"Mercedes-Benz Stadium, Atlanta" },
+  // ── Third place ──────────────────────────────────────────────
+  { ms: etMs(2026,7,18,17,0), stage:"TP",  espnId:"760516", t1:"TBD", t2:"TBD", venue:"Hard Rock Stadium, Miami" },
+  // ── Final ────────────────────────────────────────────────────
+  { ms: etMs(2026,7,19,15,0), stage:"F",   espnId:"760517", t1:"TBD", t2:"TBD", venue:"MetLife Stadium, New York/NJ" },
+];
+
+// Team → person, for the 16 teams that reached the Round of 16.
+// Every later-round winner will be one of these teams, so this covers the whole bracket.
+var PEOPLE = {
+  'Morocco':'Mick', 'Canada':'Ned',
+  'Paraguay':'Stef', 'France':'Joe',
+  'Brazil':'Ben', 'Norway':'Mark',
+  'Mexico':'Ahmad', 'England':'Ren',
+  'Spain':'Kim', 'Portugal':'Frank',
+  'Belgium':'Max', 'USA':'Chris', 'United States':'Chris',
+  'Switzerland':'Jez', 'Colombia':'Richie',
+  'Argentina':'Harley', 'Egypt':'Tim',
+};
+
+var FLAG_ISO = {
+  'Canada':'ca', 'Morocco':'ma', 'Paraguay':'py', 'Brazil':'br',
+  'Argentina':'ar', 'Uruguay':'uy', 'Colombia':'co', 'Ecuador':'ec',
+  'USA':'us', 'United States':'us', 'Mexico':'mx', 'France':'fr',
+  'Spain':'es', 'Portugal':'pt', 'Germany':'de', 'Netherlands':'nl',
+  'England':'gb-eng', 'Belgium':'be', 'Austria':'at', 'Croatia':'hr',
+  'Switzerland':'ch', 'Sweden':'se', 'Norway':'no', 'Senegal':'sn',
+  'Ivory Coast':'ci', 'Egypt':'eg', 'Algeria':'dz', 'Ghana':'gh',
+  'Japan':'jp', 'South Korea':'kr', 'Australia':'au', 'Iran':'ir',
+  'Iraq':'iq', 'Uzbekistan':'uz', 'New Zealand':'nz', 'South Africa':'za',
+  'Congo DR':'cd', 'DR Congo':'cd', 'Cape Verde':'cv', 'Cabo Verde':'cv',
+  'Bosnia-Herzegovina':'ba',
+};
+
+function flagUrl(name) {
+  var iso = FLAG_ISO[name];
+  return iso ? 'https://flagcdn.com/w80/' + iso + '.png' : null;
+}
+
+var VENUE_TZ = {
+  "NRG Stadium, Houston":                    "America/Chicago",
+  "Lincoln Financial Field, Philadelphia":   "America/New_York",
+  "MetLife Stadium, New York/NJ":            "America/New_York",
+  "Estadio Azteca, Mexico City":             "America/Mexico_City",
+  "AT&T Stadium, Dallas":                    "America/Chicago",
+  "Lumen Field, Seattle":                    "America/Los_Angeles",
+  "Mercedes-Benz Stadium, Atlanta":          "America/New_York",
+  "BC Place, Vancouver":                     "America/Vancouver",
+  "Gillette Stadium, Boston":                "America/New_York",
+  "SoFi Stadium, LA":                        "America/Los_Angeles",
+  "Hard Rock Stadium, Miami":                "America/New_York",
+  "Arrowhead Stadium, Kansas City":          "America/Chicago",
+};
+
+// ESPN's displayName doesn't always match the name used in our data (e.g. it
+// reports "United States" while we use "USA").
+var NAME_ALIASES = { 'United States': 'USA' };
+function normTeam(n) { return NAME_ALIASES[n] || n; }
+
+function isPlaceholder(name) {
+  return !name || name === 'TBD' ||
+    /^(Group|Round of|Quarterfinal|Semifinal|Third Place|Winner|Loser)/i.test(name);
+}
+
+var SCORES = {};
+var liveRefreshTimer = null;
+
+async function fetchScores() {
+  try {
+    var url = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=20260628-20260719&limit=100';
+    var res = await fetch(url);
+    if (!res.ok) return;
+    var data = await res.json();
+    var newScores = {};
+
+    (data.events || []).forEach(function(ev) {
+      var comp = ev.competitions && ev.competitions[0];
+      if (!comp) return;
+      var teams = comp.competitors || [];
+      if (teams.length < 2) return;
+
+      var home = teams.find(function(t) { return t.homeAway === 'home'; }) || teams[0];
+      var away = teams.find(function(t) { return t.homeAway === 'away'; }) || teams[1];
+      var rawHome = (home.team && home.team.displayName) || '';
+      var rawAway = (away.team && away.team.displayName) || '';
+
+      var t1 = isPlaceholder(rawHome) ? null : normTeam(rawHome);
+      var t2 = isPlaceholder(rawAway) ? null : normTeam(rawAway);
+
+      var statusType = (ev.status && ev.status.type && ev.status.type.name) || 'STATUS_SCHEDULED';
+      var rawClock   = (ev.status && ev.status.displayClock) || '';
+      var period     = (ev.status && ev.status.period) || 0;
+
+      var status = 'pre';
+      if (['STATUS_FINAL','STATUS_FULL_TIME','STATUS_FINAL_PEN','STATUS_FINAL_AET'].indexOf(statusType) !== -1) status = 'ft';
+      else if (statusType === 'STATUS_IN_PROGRESS' || statusType === 'STATUS_HALFTIME') status = 'live';
+
+      var clockDisplay = '';
+      if (status === 'live') {
+        if (statusType === 'STATUS_HALFTIME') {
+          clockDisplay = 'HT';
+        } else {
+          var mins = parseInt(rawClock.split(':')[0], 10) || 0;
+          var regularMax = period === 1 ? 45 : 90;
+          clockDisplay = mins > regularMax ? regularMax + '+' + (mins - regularMax) + "'" : mins + "'";
+        }
+      }
+      if (statusType === 'STATUS_FINAL_PEN') clockDisplay = 'Pens';
+
+      // Knockout matches can go to extra time or penalties — surface that alongside the final score.
+      var extra = null;
+      if (statusType === 'STATUS_FINAL_AET') extra = 'aet';
+      else if (statusType === 'STATUS_FINAL_PEN') extra = 'pen';
+
+      var s1 = parseInt(home.score != null ? home.score : '0', 10);
+      var s2 = parseInt(away.score != null ? away.score : '0', 10);
+
+      var winner = null;
+      if (status === 'ft') {
+        if (home.winner === true) winner = 1;
+        else if (away.winner === true) winner = 2;
+        else if (s1 > s2) winner = 1;
+        else if (s2 > s1) winner = 2;
+      }
+
+      var match = MATCHES.find(function(m) { return m.espnId === ev.id; });
+      if (match) {
+        if (t1) match.t1 = t1;
+        if (t2) match.t2 = t2;
+        newScores[match.espnId] = { s1: s1, s2: s2, status: status, clock: clockDisplay, winner: winner, extra: extra };
+      }
+    });
+
+    SCORES = newScores;
+    renderSchedule();
+    updateEliminated();
+    var hasLive = Object.keys(SCORES).some(function(id) { return SCORES[id].status === 'live'; });
+    clearTimeout(liveRefreshTimer);
+    if (hasLive) liveRefreshTimer = setTimeout(fetchScores, 60000);
+  } catch (e) {}
+}
+
+// A team is eliminated if any completed match they played (any round) shows someone else winning.
+function isTeamEliminated(name) {
+  if (!name) return false;
+  for (var i = 0; i < MATCHES.length; i++) {
+    var m = MATCHES[i];
+    var sc = SCORES[m.espnId];
+    if (!sc || sc.status !== 'ft') continue;
+    var t1 = normTeam(m.t1), t2 = normTeam(m.t2);
+    if (t1 !== name && t2 !== name) continue;
+    var winner = sc.winner === 1 ? t1 : (sc.winner === 2 ? t2 : null);
+    if (winner && winner !== name) return true;
+  }
+  return false;
+}
+
+function updateEliminated() {
+  document.querySelectorAll('#personFilter button[data-person]').forEach(function(btn) {
+    var person = btn.dataset.person;
+    if (person === 'all') return;
+    var team = Object.keys(PEOPLE).find(function(t) { return PEOPLE[t] === person; });
+    btn.classList.toggle('eliminated', !!(team && isTeamEliminated(team)));
+  });
+}
+
+// One-time setup: show each person's assigned country flag next to their name in the filter.
+function addPersonFlags() {
+  document.querySelectorAll('#personFilter button[data-person]').forEach(function(btn) {
+    var person = btn.dataset.person;
+    if (person === 'all') return;
+    var team = Object.keys(PEOPLE).find(function(t) { return PEOPLE[t] === person; });
+    var url = team ? flagUrl(team) : null;
+    if (!url) return;
+    var img = document.createElement('img');
+    img.className = 'person-filter-flag';
+    img.src = url;
+    img.alt = team;
+    btn.insertBefore(img, btn.firstChild);
+  });
+}
+
+var currentStage = "all";
+var selectedPeople = new Set();
+
+function formatCountdown(ms) {
+  var diff = ms - Date.now();
+  if (diff <= 0) return 'Starting now';
+  var totalMins = Math.floor(diff / 60000);
+  var days  = Math.floor(totalMins / 1440);
+  var hours = Math.floor((totalMins % 1440) / 60);
+  var mins  = totalMins % 60;
+  var parts = [];
+  if (days)  parts.push(days  + (days  === 1 ? ' day'    : ' days'));
+  if (hours) parts.push(hours + (hours === 1 ? ' hour'   : ' hours'));
+  if (mins || parts.length === 0) parts.push(mins + (mins === 1 ? ' minute' : ' minutes'));
+  return 'Begins in ' + parts.join(' ');
+}
+function tickCountdowns() {
+  document.querySelectorAll('.match-card-countdown[data-ms]').forEach(function(el) {
+    el.textContent = formatCountdown(parseInt(el.dataset.ms, 10));
+  });
+}
+setInterval(tickCountdowns, 30000);
+
+function getTz() { return document.getElementById('tzSelect').value; }
+
+function getEffectiveTz(match) {
+  var tz = getTz();
+  if (tz === 'local') return VENUE_TZ[match.venue] || 'America/New_York';
+  return tz;
+}
+
+function getLocalDateKey(ms, tz) {
+  return new Date(ms).toLocaleDateString('en-AU', { timeZone: tz, year:'numeric', month:'2-digit', day:'2-digit' });
+}
+function getLocalDateLabel(ms, tz) {
+  return new Date(ms).toLocaleDateString('en-AU', {
+    timeZone: tz, weekday:'long', day:'numeric', month:'long', year:'numeric'
+  });
+}
+function getTimeStr(ms, tz) {
+  return new Date(ms).toLocaleTimeString('en-AU', { timeZone: tz, hour:'numeric', minute:'2-digit', hour12:true });
+}
+
+function matchPassesFilters(m) {
+  if (currentStage !== 'all' && m.stage !== currentStage) return false;
+  if (selectedPeople.size > 0) {
+    var p1 = PEOPLE[m.t1], p2 = PEOPLE[m.t2];
+    if (!selectedPeople.has(p1) && !selectedPeople.has(p2)) return false;
+  }
+  return true;
+}
+
+function venueCity(venue) {
+  var comma = venue.lastIndexOf(',');
+  return comma !== -1 ? venue.slice(comma + 1).trim() : venue;
+}
+
+function renderSchedule() {
+  var tzForGrouping = getTz() === 'local' ? 'America/New_York' : getTz();
+  var filtered = MATCHES.filter(matchPassesFilters);
+
+  var byDay = {};
+  var dayOrder = [];
+  filtered.forEach(function(m) {
+    var key = getLocalDateKey(m.ms, tzForGrouping);
+    if (!byDay[key]) { byDay[key] = []; dayOrder.push(key); }
+    byDay[key].push(m);
+  });
+
+  var seen = new Set();
+  var uniqDays = dayOrder.filter(function(d) { if (seen.has(d)) return false; seen.add(d); return true; });
+
+  var html = '';
+  uniqDays.forEach(function(dayKey) {
+    var matches = byDay[dayKey];
+    var label = getLocalDateLabel(matches[0].ms, tzForGrouping);
+    html += '<div class="day-block" data-ms="' + matches[0].ms + '"><div class="day-header">' + label + '</div><div class="matches-grid">';
+
+    matches.forEach(function(m) {
+      var timeStr = getTimeStr(m.ms, getEffectiveTz(m));
+      var isTbd1 = isPlaceholder(m.t1);
+      var isTbd2 = isPlaceholder(m.t2);
+      var p1 = PEOPLE[m.t1] || '';
+      var p2 = PEOPLE[m.t2] || '';
+      var p1hl = selectedPeople.size > 0 && selectedPeople.has(p1);
+      var p2hl = selectedPeople.size > 0 && selectedPeople.has(p2);
+      var sc = SCORES[m.espnId];
+      var cardHl = p1hl || p2hl ? ' person-highlight' : '';
+      var city = venueCity(m.venue);
+
+      var flagUrl1 = isTbd1 ? null : flagUrl(m.t1);
+      var flagUrl2 = isTbd2 ? null : flagUrl(m.t2);
+      var flag1 = flagUrl1 ? '<img src="' + flagUrl1 + '" alt="' + m.t1 + '">' : '';
+      var flag2 = flagUrl2 ? '<img src="' + flagUrl2 + '" alt="' + m.t2 + '">' : '';
+
+      var row1Loser = '', row2Loser = '';
+      var topHtml = '', bottomHtml = '', s1Html = '', s2Html = '', metaHtml = '';
+
+      if (sc && (sc.status === 'live' || sc.status === 'ft')) {
+        var isLive = sc.status === 'live';
+        var pillLabel;
+        if (!isLive) {
+          pillLabel = 'Match Finished';
+          if (sc.extra === 'aet') pillLabel += ' · After Extra Time';
+          else if (sc.extra === 'pen') pillLabel = 'Match Finished – Penalties';
+        }
+        else if (sc.clock === 'HT') { pillLabel = 'Half Time'; }
+        else if (sc.clock) { pillLabel = 'Live · ' + sc.clock; }
+        else { pillLabel = 'Live'; }
+        var statusClass = isLive ? 'live' : 'ft';
+        topHtml = '<div class="match-card-status"><span class="match-status-pill ' + statusClass + '">' + pillLabel + '</span></div>';
+        s1Html = '<span class="score-num">' + sc.s1 + '</span>';
+        s2Html = '<span class="score-num">' + sc.s2 + '</span>';
+        metaHtml = '<div class="match-venue">' + city + '</div>';
+        if (!isLive) {
+          if (sc.winner === 1) row2Loser = ' loser';
+          else if (sc.winner === 2) row1Loser = ' loser';
+        }
+      } else {
+        bottomHtml = '<div class="match-card-countdown" data-ms="' + m.ms + '">' + formatCountdown(m.ms) + '</div>';
+        metaHtml = '<div class="match-time">' + timeStr + '</div><div class="match-venue">' + city + '</div>';
+      }
+
+      html += '<div class="match-card' + cardHl + '" data-stage="' + m.stage + '">' +
+        topHtml +
+        '<span class="match-stage-badge badge-' + (m.stage === 'F' ? 'final' : m.stage.toLowerCase()) + '">' + (STAGE_LABELS[m.stage] || m.stage) + '</span>' +
+        '<div class="match-teams">' +
+          '<div class="team-row-m' + row1Loser + '">' +
+            '<span class="team-flag">' + flag1 + '</span>' +
+            '<span class="team-name' + (isTbd1 ? ' tbd' : '') + '">' + m.t1 + '</span>' +
+            '<span class="team-person' + (p1hl ? ' highlighted' : '') + '">' + p1 + '</span>' +
+            s1Html +
+          '</div>' +
+          '<div class="vs-divider">vs</div>' +
+          '<div class="team-row-m' + row2Loser + '">' +
+            '<span class="team-flag">' + flag2 + '</span>' +
+            '<span class="team-name' + (isTbd2 ? ' tbd' : '') + '">' + m.t2 + '</span>' +
+            '<span class="team-person' + (p2hl ? ' highlighted' : '') + '">' + p2 + '</span>' +
+            s2Html +
+          '</div>' +
+        '</div>' +
+        '<div class="match-meta">' + metaHtml + '</div>' +
+        bottomHtml +
+      '</div>';
+    });
+    html += '</div></div>';
+  });
+
+  document.getElementById('schedule').innerHTML = html;
+  document.getElementById('noMatches').style.display = filtered.length === 0 ? 'block' : 'none';
+}
+
+function filterStage(btn) {
+  document.querySelectorAll('#stageFilter button').forEach(function(b) { b.classList.remove('active'); });
+  btn.classList.add('active');
+  currentStage = btn.dataset.stage;
+  renderSchedule();
+}
+
+function togglePersonFilter() {
+  var panel = document.getElementById('personFilterPanel');
+  var toggle = document.getElementById('personFilterToggle');
+  var isOpen = panel.classList.contains('open');
+  panel.classList.toggle('open', !isOpen);
+  toggle.classList.toggle('open', !isOpen);
+}
+
+function collapsePersonFilter() {
+  document.getElementById('personFilterPanel').classList.remove('open');
+  document.getElementById('personFilterToggle').classList.remove('open');
+}
+
+function updateActiveChips() {
+  var container = document.getElementById('personActiveChips');
+  while (container.firstChild) container.removeChild(container.firstChild);
+  selectedPeople.forEach(function(person) {
+    var sourceBtn = document.querySelector('#personFilter button[data-person="' + person + '"]');
+    var label = sourceBtn ? sourceBtn.textContent : person;
+    var chip = document.createElement('button');
+    chip.className = 'active';
+    chip.style.cssText = 'padding:5px 12px;border-radius:20px;border:1px solid #111;background:#333;color:#fff;font-size:12px;font-weight:500;cursor:pointer;';
+    chip.textContent = label + ' ✕';
+    chip.addEventListener('click', function() { removePerson(person); });
+    container.appendChild(chip);
+  });
+}
+
+function removePerson(person) {
+  selectedPeople.delete(person);
+  var btn = document.querySelector('#personFilter button[data-person="' + person + '"]');
+  if (btn) btn.classList.remove('active');
+  if (selectedPeople.size === 0) {
+    document.querySelector('#personFilter button[data-person="all"]').classList.add('active');
+  }
+  updateActiveChips();
+  renderSchedule();
+}
+
+function filterPerson(btn) {
+  var person = btn.dataset.person;
+  if (person === 'all') {
+    selectedPeople.clear();
+    document.querySelectorAll('#personFilter button').forEach(function(b) { b.classList.remove('active'); });
+    btn.classList.add('active');
+    updateActiveChips();
+    collapsePersonFilter();
+  } else {
+    document.querySelector('#personFilter button[data-person="all"]').classList.remove('active');
+    if (selectedPeople.has(person)) {
+      selectedPeople.delete(person);
+      btn.classList.remove('active');
+    } else {
+      selectedPeople.add(person);
+      btn.classList.add('active');
+    }
+    if (selectedPeople.size === 0) {
+      document.querySelector('#personFilter button[data-person="all"]').classList.add('active');
+    }
+    updateActiveChips();
+    collapsePersonFilter();
+  }
+  renderSchedule();
+}
+
+var savedTz = localStorage.getItem('fz5tz');
+if (savedTz) { var sel = document.getElementById('tzSelect'); if ([...sel.options].some(function(o) { return o.value === savedTz; })) sel.value = savedTz; }
+
+function scrollToUpcoming() {
+  var now = Date.now();
+  var blocks = document.querySelectorAll('.day-block[data-ms]');
+  var target = null;
+  for (var i = 0; i < blocks.length; i++) {
+    var block = blocks[i];
+    var ms = parseInt(block.dataset.ms, 10);
+    if (ms > now || block.querySelector('.match-card-countdown')) {
+      target = block;
+      break;
+    }
+  }
+  if (!target) target = blocks[blocks.length - 1];
+  if (!target) return;
+  var stickyOffset = Array.from(document.querySelectorAll('header, .subheader'))
+    .reduce(function(sum, el) { return sum + el.offsetHeight; }, 0);
+  var top = target.getBoundingClientRect().top + window.scrollY - stickyOffset - 12;
+  window.scrollTo({ top: top, behavior: 'smooth' });
+}
+
+addPersonFlags();
+renderSchedule();
+fetchScores();
+</script>
+</body>
+</html>
