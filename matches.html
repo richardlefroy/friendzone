@@ -44,20 +44,6 @@
 
 <div class="subheader">
   <button class="upcoming-btn" onclick="scrollToUpcoming()">Upcoming matches</button>
-  <div class="tz-selector">
-    <label>Timezone:</label>
-    <select id="tzSelect" onchange="localStorage.setItem('fz5tz', this.value); renderSchedule()">
-      <option value="local">Local match time</option>
-      <option value="Australia/Perth" selected>Perth</option>
-      <option value="Australia/Melbourne">Melbourne</option>
-      <option value="Australia/Hobart">Hobart</option>
-      <option value="Europe/Berlin">Germany</option>
-      <option value="Europe/Rome">Italy</option>
-      <option value="Europe/London">United Kingdom</option>
-      <option value="America/Los_Angeles">Los Angeles</option>
-      <option value="Europe/Zurich">Switzerland</option>
-    </select>
-  </div>
 </div>
 
 <div class="content">
@@ -184,20 +170,8 @@ function flagUrl(name) {
   return iso ? 'https://flagcdn.com/w80/' + iso + '.png' : null;
 }
 
-var VENUE_TZ = {
-  "NRG Stadium, Houston":                    "America/Chicago",
-  "Lincoln Financial Field, Philadelphia":   "America/New_York",
-  "MetLife Stadium, New York/NJ":            "America/New_York",
-  "Estadio Azteca, Mexico City":             "America/Mexico_City",
-  "AT&T Stadium, Dallas":                    "America/Chicago",
-  "Lumen Field, Seattle":                    "America/Los_Angeles",
-  "Mercedes-Benz Stadium, Atlanta":          "America/New_York",
-  "BC Place, Vancouver":                     "America/Vancouver",
-  "Gillette Stadium, Boston":                "America/New_York",
-  "SoFi Stadium, LA":                        "America/Los_Angeles",
-  "Hard Rock Stadium, Miami":                "America/New_York",
-  "Arrowhead Stadium, Kansas City":          "America/Chicago",
-};
+// All match times are shown in Perth, WA time.
+var DISPLAY_TZ = 'Australia/Perth';
 
 // ESPN's displayName doesn't always match the name used in our data (e.g. it
 // reports "United States" while we use "USA").
@@ -350,14 +324,6 @@ function tickCountdowns() {
 }
 setInterval(tickCountdowns, 30000);
 
-function getTz() { return document.getElementById('tzSelect').value; }
-
-function getEffectiveTz(match) {
-  var tz = getTz();
-  if (tz === 'local') return VENUE_TZ[match.venue] || 'America/New_York';
-  return tz;
-}
-
 function getLocalDateKey(ms, tz) {
   return new Date(ms).toLocaleDateString('en-AU', { timeZone: tz, year:'numeric', month:'2-digit', day:'2-digit' });
 }
@@ -385,13 +351,12 @@ function venueCity(venue) {
 }
 
 function renderSchedule() {
-  var tzForGrouping = getTz() === 'local' ? 'America/New_York' : getTz();
   var filtered = MATCHES.filter(matchPassesFilters);
 
   var byDay = {};
   var dayOrder = [];
   filtered.forEach(function(m) {
-    var key = getLocalDateKey(m.ms, tzForGrouping);
+    var key = getLocalDateKey(m.ms, DISPLAY_TZ);
     if (!byDay[key]) { byDay[key] = []; dayOrder.push(key); }
     byDay[key].push(m);
   });
@@ -402,11 +367,11 @@ function renderSchedule() {
   var html = '';
   uniqDays.forEach(function(dayKey) {
     var matches = byDay[dayKey];
-    var label = getLocalDateLabel(matches[0].ms, tzForGrouping);
+    var label = getLocalDateLabel(matches[0].ms, DISPLAY_TZ);
     html += '<div class="day-block" data-ms="' + matches[0].ms + '"><div class="day-header">' + label + '</div><div class="matches-grid">';
 
     matches.forEach(function(m) {
-      var timeStr = getTimeStr(m.ms, getEffectiveTz(m));
+      var timeStr = getTimeStr(m.ms, DISPLAY_TZ);
       var isTbd1 = isPlaceholder(m.t1);
       var isTbd2 = isPlaceholder(m.t2);
       var p1 = PEOPLE[m.t1] || '';
@@ -550,9 +515,6 @@ function filterPerson(btn) {
   }
   renderSchedule();
 }
-
-var savedTz = localStorage.getItem('fz5tz');
-if (savedTz) { var sel = document.getElementById('tzSelect'); if ([...sel.options].some(function(o) { return o.value === savedTz; })) sel.value = savedTz; }
 
 function scrollToUpcoming() {
   var now = Date.now();
