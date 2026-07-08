@@ -105,11 +105,11 @@ header {
 .pill-filter button:hover { border-color: #888; }
 .pill-filter button.active { background: #333; color: #fff; border-color: #111; }
 .pill-filter button.eliminated {
-  background: #fef2f2; color: #b91c1c; border-color: #fca5a5;
-  text-decoration: line-through; opacity: 0.75;
+  background: #e8e5e0; color: #999; border-color: #d5d2cc;
+  text-decoration: line-through; opacity: 0.85;
 }
-.pill-filter button.eliminated:hover { border-color: #f87171; opacity: 1; }
-.pill-filter button.eliminated.active { background: #b91c1c; color: #fff; border-color: #991b1b; text-decoration: line-through; }
+.pill-filter button.eliminated:hover { border-color: #bbb; opacity: 1; }
+.pill-filter button.eliminated.active { background: #999; color: #fff; border-color: #888; text-decoration: line-through; }
 
 .filter-toggle-row {
   display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;
