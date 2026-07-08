@@ -106,7 +106,7 @@ header {
 .pill-filter button.active { background: #333; color: #fff; border-color: #111; }
 .pill-filter button.eliminated {
   background: #e8e5e0; color: #999; border-color: #d5d2cc;
-  text-decoration: line-through; opacity: 0.85;
+  opacity: 0.85;
 }
 .pill-filter button.eliminated:hover { border-color: #bbb; opacity: 1; }
 .pill-filter button.eliminated.active { background: #999; color: #fff; border-color: #888; text-decoration: line-through; }
