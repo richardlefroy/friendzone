@@ -202,12 +202,13 @@ header {
 .team-row-m { display: flex; align-items: center; gap: 7px; padding: 2px 0; }
 .team-row-m.loser { color: #aaa; }
 .team-row-m.loser .team-name,
+.team-row-m.loser .team-person,
 .team-row-m.loser .score-num { color: #aaa; }
 .team-flag { font-size: 18px; line-height: 1; width: 22px; flex-shrink: 0; }
 .team-name { font-size: 13px; font-weight: 500; color: #111; }
 .team-name.tbd { color: #aaa; font-style: italic; }
 .team-person {
-  font-size: 11px; color: #888; margin-left: auto; white-space: nowrap; padding-left: 6px;
+  font-size: 13px; font-weight: 500; color: #111; margin-left: auto; white-space: nowrap; padding-left: 6px;
 }
 .team-person.highlighted { color: #1d4ed8; font-weight: 600; }
 
