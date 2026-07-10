@@ -161,16 +161,23 @@ var POTENTIALS = {
   '760508': { t1: 'NED/MAR', t2: 'RSA/CAN' },
 };
 
+// Per ESPN's actual bracket, QF matchups don't follow the same numeric order as
+// R16_IDS — e.g. QF 760510 is the R16[6]/R16[7] winners (Morocco/Canada vs
+// Paraguay/France side), not R16[0]/R16[1]. Ordered here to match the
+// geometric pairing: QF_IDS[i] is the match between the winners of
+// R16_IDS[i*2] and R16_IDS[i*2+1].
 var QF_IDS = [
-  '760510', // 0  winner R16[0] vs winner R16[1]
-  '760511', // 1  winner R16[2] vs winner R16[3]
-  '760512', // 2  winner R16[4] vs winner R16[5]
-  '760513', // 3  winner R16[6] vs winner R16[7]
+  '760512', // 0  winner R16[0] vs winner R16[1]  (Norway vs England side)
+  '760513', // 1  winner R16[2] vs winner R16[3]  (Argentina vs Switzerland side)
+  '760511', // 2  winner R16[4] vs winner R16[5]  (Belgium vs Spain side)
+  '760510', // 3  winner R16[6] vs winner R16[7]  (Morocco vs France side)
 ];
 
+// Same reordering applies at the SF level — SF_IDS[i] is the match between
+// the winners of QF_IDS[i*2] and QF_IDS[i*2+1].
 var SF_IDS = [
-  '760514', // 0  winner QF[0] vs winner QF[1]
-  '760515', // 1  winner QF[2] vs winner QF[3]
+  '760515', // 0  winner QF[0] vs winner QF[1]
+  '760514', // 1  winner QF[2] vs winner QF[3]
 ];
 
 var FINAL_ID = '760517';
@@ -267,6 +274,21 @@ function getWinner(id) {
   if (s.winner === 1) return s.t1;
   if (s.winner === 2) return s.t2;
   return null;
+}
+
+// A team that won its way onto the join/QF/SF ring can still be knocked out later
+// (e.g. Morocco won R16 but lost the QF) — check every subsequent match for that.
+function isTeamEliminated(name) {
+  if (!name) return false;
+  var allIds = R16_IDS.concat(QF_IDS, SF_IDS, [FINAL_ID]);
+  for (var i = 0; i < allIds.length; i++) {
+    var s = getScore(allIds[i]);
+    if (!s || s.status !== 'ft') continue;
+    if (s.t1 !== name && s.t2 !== name) continue;
+    var w = getWinner(allIds[i]);
+    if (w && w !== name) return true;
+  }
+  return false;
 }
 
 // =============================================================================
@@ -521,19 +543,19 @@ function build() {
   // ── Join nodes (show R16 winner) — no labels ──
   for (var ji3 = 0; ji3 < 8; ji3++) {
     var jw = getWinner(R16_IDS[ji3]);
-    nodesG.appendChild(makeNode(joinP[ji3].x, joinP[ji3].y, NR.join, jw, R16_IDS[ji3], false));
+    nodesG.appendChild(makeNode(joinP[ji3].x, joinP[ji3].y, NR.join, jw, R16_IDS[ji3], isTeamEliminated(jw)));
   }
 
   // ── QF nodes — no labels ──
   for (var qi3 = 0; qi3 < 4; qi3++) {
     var qfw = getWinner(QF_IDS[qi3]);
-    nodesG.appendChild(makeNode(qfP[qi3].x, qfP[qi3].y, NR.qf, qfw, QF_IDS[qi3], false));
+    nodesG.appendChild(makeNode(qfP[qi3].x, qfP[qi3].y, NR.qf, qfw, QF_IDS[qi3], isTeamEliminated(qfw)));
   }
 
   // ── SF nodes — no labels ──
   for (var si3 = 0; si3 < 2; si3++) {
     var sfw = getWinner(SF_IDS[si3]);
-    nodesG.appendChild(makeNode(sfP[si3].x, sfP[si3].y, NR.sf, sfw, SF_IDS[si3], false));
+    nodesG.appendChild(makeNode(sfP[si3].x, sfP[si3].y, NR.sf, sfw, SF_IDS[si3], isTeamEliminated(sfw)));
   }
 
   svg.appendChild(linesG);
