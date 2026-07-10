@@ -528,14 +528,19 @@ function build() {
     var w2    = getWinner(rid);
     var espnT = sc2 ? (mi2 % 2 === 0 ? sc2.t1 : sc2.t2) : null;
     var tname = (espnT && !isPlaceholder(espnT)) ? espnT : TEAMS[mi2].name;
-    var elim   = w2 && tname && w2 !== tname;
+    // The flag/node only greys out for the round a team actually lost in — Morocco's
+    // R16 flag stays in colour since they won that match. The name label below it
+    // greys out as soon as the team is eliminated at all, even in a later round
+    // (e.g. Morocco's label greys out once they lose the QF).
+    var lostR16    = w2 && tname && w2 !== tname;
+    var elimOverall = lostR16 || isTeamEliminated(tname);
     var person = personFor(tname);
-    var lblCls = elim ? 'elim' : (w2 === tname ? 'won' : (tname ? 'active' : ''));
+    var lblCls = elimOverall ? 'elim' : (w2 === tname ? 'won' : (tname ? 'active' : ''));
     // Use potential label when team not yet known
     var pot    = POTENTIALS[rid];
     var displayLbl = tname ? shortName(tname)
                            : (pot ? (mi2 % 2 === 0 ? pot.t1 : pot.t2) : '?');
-    nodesG.appendChild(makeNode(slotPos[mi2].x, slotPos[mi2].y, NR.r16, tname, rid, elim));
+    nodesG.appendChild(makeNode(slotPos[mi2].x, slotPos[mi2].y, NR.r16, tname, rid, lostR16));
     nodesG.appendChild(makeLabel(slotPos[mi2].x, slotPos[mi2].y, slotAng[mi2],
       displayLbl, NR.r16, lblCls, person));
   }
